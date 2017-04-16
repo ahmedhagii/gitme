@@ -6,13 +6,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"io"
+	"os/exec"
+	// "io/ioutil"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/fatih/color"
 	"github.com/google/go-github/github"
@@ -58,29 +59,10 @@ func ListContributors(owner string, repo string, client *github.Client) ([]strin
 	return loginsArray, nil
 }
 
-// func printCommit(ctx context.Context, rep *github.RepositoryCommit, owner string, repo string, client *github.Client) {
-// 	fmt.Printf("%-8s %s\n", colorize(color.FgYellow, "commit:"), colorize(color.FgYellow, rep.GetSHA()))
-// 	fmt.Printf("message: %-s\n", rep.Commit.GetMessage())
-// 	fmt.Printf("%-8s %v\n", "date:", rep.Commit.Author.GetDate())
-
-// 	r, _, _ := client.Repositories.GetCommit(ctx, owner, repo, rep.GetSHA())
-// 	fmt.Printf("%s, %s\n",
-// 		color.GreenString("Additions: "+strconv.Itoa(r.Stats.GetAdditions())),
-// 		color.RedString("Deletions: "+strconv.Itoa(r.Stats.GetDeletions())))
-// 	fmt.Println(color.BlueString(r.GetHTMLURL()))
-// 	fmt.Println()
-
-// 	files := r.Files
-// 	for _, rr := range files {
-// 		fmt.Printf("   %s\n", rr.GetFilename())
-// 		// fmt.Println(printDiffs(rr.GetPatch()))
-// 	}
-// 	fmt.Println("\n")
-// }
-
 func printCommit(ctx context.Context, rep *github.RepositoryCommit, owner string, repo string, client *github.Client) string {
 	var output bytes.Buffer
-	output.WriteString(fmt.Sprintf("%-8s %s\n", colorize(color.FgYellow, "commit:"), colorize(color.FgYellow, rep.GetSHA())))
+	output.WriteString(fmt.Sprintf("%-8s  %s\n", colorize(color.FgYellow, "commit:"), colorize(color.FgYellow, rep.GetSHA())))
+	output.WriteString(fmt.Sprintf("%-8s  %s\n", colorize(color.FgWhite, "author:"), colorize(color.FgWhite, rep.Author.GetLogin())))
 	output.WriteString(fmt.Sprintf("message: %-s\n", rep.Commit.GetMessage()))
 	output.WriteString(fmt.Sprintf("%-8s %v\n", "date:", rep.Commit.Author.GetDate()))
 
@@ -100,27 +82,12 @@ func printCommit(ctx context.Context, rep *github.RepositoryCommit, owner string
 	return output.String()
 }
 
-func listCommits(owner string, repo string, client *github.Client) error {
+func ListCommits(owner string, repo string, opt *github.CommitsListOptions, client *github.Client) error {
 	ctx := context.Background()
 
-	opt := github.CommitsListOptions{Author: "YasmeenWafa"}
-	if *since != "" {
-		sinceDate, err := time.Parse("02-01-2006", *since)
-		if err != nil {
-			log.Fatal("pass date to --since in the correct format DD-MM-YYYY", err)
-		}
-		opt.Since = sinceDate
-	}
-	if *until != "" {
-		untilDate, err := time.Parse("02-01-2006", *until)
-		if err != nil {
-			log.Fatal("pass date to --until in the correct format DD:MM:YYY", err)
-		}
-		opt.Until = untilDate
-	}
-	opt.ListOptions = github.ListOptions{PerPage: 1000}
-	repos, _, err := client.Repositories.ListCommits(ctx, owner, repo, &opt)
+	repos, _, err := client.Repositories.ListCommits(ctx, owner, repo, opt)
 	if err != nil {
+		fmt.Println("errror", err)
 		return nil
 	}
 
@@ -130,10 +97,8 @@ func listCommits(owner string, repo string, client *github.Client) error {
 		go func(ind int, rep *github.RepositoryCommit) {
 			wg.Add(1)
 			defer wg.Done()
-			// fmt.Println("done ", ind, rep.GetSHA())
 			str := printCommit(ctx, rep, owner, repo, client)
 			out1 <- CommitResult{index: ind, output: str}
-			// fmt.Println(str)
 		}(ind, rep)
 	}
 
@@ -143,16 +108,26 @@ func listCommits(owner string, repo string, client *github.Client) error {
 	}
 	close(out1)
 	wg.Wait()
-	fmt.Printf("%s\n\n", colorize(color.FgYellow, "Total commits:", strconv.Itoa(len(repos))))
 
 	sort.Sort(commitResults)
-	if *printAll {
-		for _, val := range commitResults {
-			fmt.Println(val.output)
-		}
-	} else {
-		printOnDemand(commitResults)
+
+	// declare your pager
+	cmd := exec.Command("less")
+	// create a pipe (blocking)
+	pipeReader, pipeWriter := io.Pipe()
+	// defer pipeWriter.Close()
+	// Set your i/o's
+	cmd.Stdin = pipeReader
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Start()
+	// Pass anything to your pipe
+	fmt.Fprintf(pipeWriter, "%s\n\n", colorize(color.FgYellow, "Total commits:", strconv.Itoa(len(repos))))
+	for _, val := range commitResults {
+		fmt.Fprintf(pipeWriter, val.output)
 	}
+	pipeWriter.Close()
+	cmd.Wait()
 	return nil
 }
 
@@ -210,13 +185,24 @@ func colorize(colorVar color.Attribute, str ...string) string {
 	return colorAgent(strings.Join(str, " "))
 }
 
+type Config struct {
+	Owner string `json:"owner"`
+	Repo  string `json:"repo"`
+}
+
 func main() {
 	color.NoColor = false
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Gmark is a tool for grading projects residing on github.\n\n")
 		flag.PrintDefaults()
 	}
-
+	// configj, _ := json.Marshal(&Config{Owner: "jfkdf", Repo: "kdjfd"})
+	// ioutil.WriteFile("/tmp/gitme-config", configj, 0644)
+	// data, _ := ioutil.ReadFile("/tmp/gitme-config")
+	// config := Config{}
+	// _ = json.Unmarshal(data, &config)
+	// fmt.Printf("%+v", config)
+	// return
 	flag.Parse()
 	// client := github.NewClient(nil)
 
@@ -241,7 +227,9 @@ func main() {
 	// logins, err := listContributors("secourse2016", "404notfound", client)
 	// if err != nil {
 	// }
-	_ = listCommits("secourse2016", "404notfound", client)
+	_ = client
+	// _ = ListCommits("secourse2016", "404notfound", client)
+
 	// log.Fatal(err)
 	// fmt.Println(logins)
 }
