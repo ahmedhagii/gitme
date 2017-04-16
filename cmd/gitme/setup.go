@@ -21,8 +21,10 @@ func (*setupCmd) Name() string     { return "setup" }
 func (*setupCmd) Synopsis() string { return "setup the data required for this tool" }
 func (*setupCmd) Usage() string {
 	return `
-Usage:	gitme setup --owner <repo_owner_name> --repo <repo_name>
-		--token <github_token>
+	accepts required data to setup the gitme command.
+
+usage:	setup --owner <repo_owner_name> --repo <repo_name>
+	      --token <github_token>
 
 `
 }
