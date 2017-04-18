@@ -58,7 +58,7 @@ func ListContributors(owner string, repo string, client *github.Client) ([]strin
 	return loginsArray, nil
 }
 
-func printCommit(ctx context.Context, rep *github.RepositoryCommit, owner string, repo string, client *github.Client) string {
+func printCommit(ctx context.Context, rep *github.RepositoryCommit, owner string, repo string, exclude []string, client *github.Client) string {
 	var output bytes.Buffer
 	output.WriteString(fmt.Sprintf("%-8s  %s\n", colorize(color.FgYellow, "commit:"), colorize(color.FgYellow, rep.GetSHA())))
 	output.WriteString(fmt.Sprintf("%-8s  %s\n", colorize(color.FgWhite, "author:"), colorize(color.FgWhite, rep.Author.GetLogin())))
@@ -66,49 +66,41 @@ func printCommit(ctx context.Context, rep *github.RepositoryCommit, owner string
 	output.WriteString(fmt.Sprintf("%-8s %v\n", "date:", rep.Commit.Author.GetDate()))
 
 	r, _, _ := client.Repositories.GetCommit(ctx, owner, repo, rep.GetSHA())
+	additions := 0
+	deletions := 0
+	fileChanges := []string{}
+
+	for _, rr := range r.Files {
+		pass := false
+		for _, path := range exclude {
+			if strings.Contains(rr.GetFilename(), path) {
+				pass = true
+				break
+			}
+		}
+		if !pass {
+			deletions += rr.GetDeletions()
+			additions += rr.GetAdditions()
+			fileChanges = append(fileChanges, rr.GetFilename()+" "+color.GreenString("+"+strconv.Itoa(rr.GetAdditions()))+
+				" "+color.RedString("-"+strconv.Itoa(rr.GetDeletions())))
+		}
+		// fmt.Println(printDiffs(rr.GetPatch()))
+	}
 	output.WriteString(fmt.Sprintf("%s, %s\n",
-		color.GreenString("Additions: "+strconv.Itoa(r.Stats.GetAdditions())),
-		color.RedString("Deletions: "+strconv.Itoa(r.Stats.GetDeletions()))))
+		color.GreenString("Additions: "+strconv.Itoa(additions)),
+		color.RedString("Deletions: "+strconv.Itoa(deletions))))
 	output.WriteString(fmt.Sprintln(color.BlueString(r.GetHTMLURL())))
 	output.WriteString(fmt.Sprintln())
 
-	files := r.Files
-	for _, rr := range files {
-		output.WriteString(fmt.Sprintf("\t%s\n", rr.GetFilename()))
-		// fmt.Println(printDiffs(rr.GetPatch()))
+	for _, file := range fileChanges {
+		output.WriteString(fmt.Sprintf("\t%s\n", file))
 	}
 	output.WriteString(fmt.Sprintln("\n"))
 	return output.String()
 }
 
-func ListCommits(owner string, repo string, opt *github.CommitsListOptions, client *github.Client) error {
+func ListCommits(owner string, repo string, exclude []string, opt *github.CommitsListOptions, client *github.Client) error {
 	ctx := context.Background()
-
-	repos, _, err := client.Repositories.ListCommits(ctx, owner, repo, opt)
-	if err != nil {
-		fmt.Println("errror", err)
-		return nil
-	}
-
-	var wg sync.WaitGroup
-	out1 := make(chan CommitResult, len(repos))
-	for ind, rep := range repos {
-		go func(ind int, rep *github.RepositoryCommit) {
-			wg.Add(1)
-			defer wg.Done()
-			str := printCommit(ctx, rep, owner, repo, client)
-			out1 <- CommitResult{index: ind, output: str}
-		}(ind, rep)
-	}
-
-	commitResults := CommitResults{}
-	for i := 0; i < len(repos); i++ {
-		commitResults = append(commitResults, <-out1)
-	}
-	close(out1)
-	wg.Wait()
-
-	sort.Sort(commitResults)
 
 	// declare your pager
 	cmd := exec.Command("less")
@@ -120,13 +112,57 @@ func ListCommits(owner string, repo string, opt *github.CommitsListOptions, clie
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Start()
-	// Pass anything to your pipe
-	fmt.Fprintf(pipeWriter, "%s\n\n", colorize(color.FgYellow, "Total commits:", strconv.Itoa(len(repos))))
-	for _, val := range commitResults {
-		fmt.Fprintf(pipeWriter, val.output)
-	}
-	pipeWriter.Close()
+
+	go func() error {
+		for page := 1; true; page++ {
+			opt.ListOptions = github.ListOptions{Page: page, PerPage: 50}
+			commitList, _, err := client.Repositories.ListCommits(ctx, owner, repo, opt)
+
+			if err != nil {
+				fmt.Println("errror getting list of commits", err)
+				return err
+			}
+			// just check where to stop requesting more pages
+			if len(commitList) == 0 {
+				pipeWriter.Close()
+				break
+			}
+			out1 := make(chan CommitResult, len(commitList))
+			var wg sync.WaitGroup
+			for ind, rep := range commitList {
+				go func(ind int, rep *github.RepositoryCommit) {
+					wg.Add(1)
+					defer wg.Done()
+					str := printCommit(ctx, rep, owner, repo, exclude, client)
+					out1 <- CommitResult{index: ind, output: str}
+				}(ind, rep)
+			}
+
+			commitResults := CommitResults{}
+			for i := 0; i < len(commitList); i++ {
+				commitResults = append(commitResults, <-out1)
+			}
+			close(out1)
+			wg.Wait()
+
+			sort.Sort(commitResults)
+			for _, val := range commitResults {
+				fmt.Fprintf(pipeWriter, val.output)
+			}
+		}
+		return nil
+	}()
+
 	cmd.Wait()
+	// fmt.Println(">>>>>>>>>>> out", pagerErr)
+	// if pagerErr == nil {
+	// 	pipeWriter.Close()
+	// 	pipeReader.Close()
+	// 	fmt.Println("breaking")
+	// 	return nil
+	// }
+	pipeWriter.Close()
+	pipeReader.Close()
 	return nil
 }
 
@@ -214,8 +250,8 @@ func main() {
 		&oauth2.Token{AccessToken: "c57d151c767b927601458fdae8b88b23a7529788"},
 	)
 	tc := oauth2.NewClient(ctx, ts)
-
-	client := github.NewClient(tc)
+	_ = tc
+	client := github.NewClient(nil)
 
 	// list all repositories for the authenticated user
 	// repos, _, _ := client.Repositories.List(ctx, "", nil)
