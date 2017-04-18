@@ -3,15 +3,25 @@ package main
 import (
 	"context"
 	"flag"
-	// "fmt"
+	"fmt"
 	"os"
 
 	"github.com/google/subcommands"
 )
 
 func main() {
-	subcommands.Register(subcommands.FlagsCommand(), "")
-	subcommands.Register(subcommands.CommandsCommand(), "")
+	usageMsg := `usage: gitme <command> [<args>]
+
+The following is a list of available gitme commands
+
+   log     Shows a log of this repo's commit history
+   setup   Setup the data required for this tool
+
+See 'gitme <command> --help' to read about a specific subcommand.
+`
+	flag.CommandLine.Usage = func() {
+		fmt.Println(usageMsg)
+	}
 	subcommands.Register(&logCmd{}, "")
 	subcommands.Register(&setupCmd{}, "")
 	flag.Parse()
