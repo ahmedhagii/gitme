@@ -6,8 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	// "github.com/ahmedhagii/gitme"
-	// "github.com/google/go-github/github"
+
 	"github.com/google/subcommands"
 )
 
@@ -18,7 +17,7 @@ type setupCmd struct {
 }
 
 func (*setupCmd) Name() string     { return "setup" }
-func (*setupCmd) Synopsis() string { return "setup the data required for this tool" }
+func (*setupCmd) Synopsis() string { return "Setup the data required for this tool" }
 func (*setupCmd) Usage() string {
 	return `
 	accepts required data to setup the gitme command.
@@ -51,7 +50,7 @@ func (c *setupCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 
 	configj, err := json.Marshal(c)
 	if err != nil {
-		fmt.Println("failed to marshal setup data into json")
+		fmt.Println("failed to convert setup data into json")
 		return subcommands.ExitFailure
 	}
 	err = ioutil.WriteFile("/tmp/gitme-config", configj, 0644)
@@ -62,6 +61,6 @@ func (c *setupCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{})
 }
 
 func printMissing(msg string, c *setupCmd) {
-	fmt.Printf("\n\t%s\n\n", msg)
+	fmt.Printf("\n%s\n\n", msg)
 	fmt.Println(c.Usage())
 }
