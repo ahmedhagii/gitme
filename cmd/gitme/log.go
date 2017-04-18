@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"strings"
 	"time"
 
 	"github.com/ahmedhagii/gitme"
@@ -15,10 +16,23 @@ import (
 )
 
 type logCmd struct {
-	since  string
-	until  string
-	author string
-	path   string
+	since   string
+	until   string
+	author  string
+	path    string
+	exclude pathList
+}
+
+type pathList []string
+
+func (p *pathList) String() string {
+	return fmt.Sprint("list of paths to exclude")
+}
+func (p *pathList) Set(value string) error {
+	for _, path := range strings.Split(value, " ") {
+		*p = append(*p, path)
+	}
+	return nil
 }
 
 func (*logCmd) Name() string     { return "log" }
@@ -28,7 +42,7 @@ func (*logCmd) Usage() string {
 	Shows a history of commits.
 
 usage:	log [--author <github_name> ] [--since <DD-MM-YYYY>] [--until <DD-MM-YYYY>]
-	    [--parth <file_path>]:
+	    [--path <file_path>] [--exclude <paths>] :
 
 `
 }
@@ -38,14 +52,17 @@ func (c *logCmd) SetFlags(f *flag.FlagSet) {
 	f.StringVar(&c.since, "since", "", "Show commits after specified date")
 	f.StringVar(&c.until, "until", "", "Show commits before specified date")
 	f.StringVar(&c.path, "path", "", "Show commits only affecting the specified path whether it's a file or a directory")
+	f.Var(&c.exclude, "exclude", `Pass space seperated paths in one string e.g. \"path1 path2\",
+	those paths will be excluded from output. Use this to exclude auto generated files`)
 }
 
 func (c *logCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
 	configData, err := ioutil.ReadFile("/tmp/gitme-config")
 	if err != nil {
 		fmt.Println(`couldn't read config file at "/tmp/gtime-config"
-			run gitme setup`)
+			run gitme setup <args>`)
 	}
+
 	config := setupCmd{}
 	_ = json.Unmarshal(configData, &config)
 
@@ -81,9 +98,7 @@ func (c *logCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) s
 		}
 		opt.Until = untilDate
 	}
-	opt.ListOptions = github.ListOptions{PerPage: 1000}
-
-	gitme.ListCommits(config.Owner, config.Repo, &opt, client)
+	gitme.ListCommits(config.Owner, config.Repo, c.exclude, &opt, client)
 
 	return subcommands.ExitSuccess
 }
