@@ -14,8 +14,9 @@ func main() {
 
 The following is a list of available gitme commands
 
-   log     Shows a log of this repo's commit history
-   setup   Setup the data required for this tool
+   log        Shows a log of this repo's commit history
+   setup      Setup the data required for this tool
+   contrib    Get a list of contributors
 
 See 'gitme <command> --help' to read about a specific subcommand.
 `
@@ -24,6 +25,7 @@ See 'gitme <command> --help' to read about a specific subcommand.
 	}
 	subcommands.Register(&logCmd{}, "")
 	subcommands.Register(&setupCmd{}, "")
+	subcommands.Register(&contribCmd{}, "")
 	flag.Parse()
 
 	ctx := context.Background()
