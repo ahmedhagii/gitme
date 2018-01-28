@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ahmedhagii/gitme"
+	"github.com/ahmedhagii/gitme/misc"
 	"github.com/google/go-github/github"
 	"github.com/google/subcommands"
 	"golang.org/x/oauth2"
@@ -52,8 +52,9 @@ func (c *logCmd) SetFlags(f *flag.FlagSet) {
 	f.StringVar(&c.since, "since", "", "Show commits after specified date")
 	f.StringVar(&c.until, "until", "", "Show commits before specified date")
 	f.StringVar(&c.path, "path", "", "Show commits only affecting the specified path whether it's a file or a directory")
-	f.Var(&c.exclude, "exclude", `Pass space seperated paths in one string e.g. \"path1 path2\",
-	those paths will be excluded from output. Use this to exclude auto generated files`)
+	f.Var(&c.exclude, "exclude", `Pass space seperated paths in one string e.g. "path1 path2",
+	those paths will be excluded from output. Use this
+	to exclude auto generated files`)
 }
 
 func (c *logCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
@@ -98,7 +99,7 @@ func (c *logCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) s
 		}
 		opt.Until = untilDate
 	}
-	gitme.ListCommits(config.Owner, config.Repo, c.exclude, &opt, client)
+	misc.ListCommits(config.Owner, config.Repo, c.exclude, &opt, client)
 
 	return subcommands.ExitSuccess
 }

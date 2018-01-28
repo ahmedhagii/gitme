@@ -1,4 +1,4 @@
-package gitme
+package misc
 
 import (
 	"bufio"
@@ -16,7 +16,6 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/google/go-github/github"
-	"golang.org/x/oauth2"
 )
 
 var (
@@ -44,16 +43,41 @@ func (slice CommitResults) Swap(i, j int) {
 	slice[i], slice[j] = slice[j], slice[i]
 }
 
+func OutputToPager(list []string) {
+	// declare your pager
+	cmd := exec.Command("less")
+	// create a pipe (blocking)
+	pipeReader, pipeWriter := io.Pipe()
+	// defer pipeWriter.Close()
+	// Set your i/o's
+	cmd.Stdin = pipeReader
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Start()
+
+	go func() {
+		for _, s := range list {
+			fmt.Fprintln(pipeWriter, s)
+		}
+		pipeWriter.Close()
+	}()
+	cmd.Wait()
+}
+
 func ListContributors(owner string, repo string, client *github.Client) ([]string, error) {
 	ctx := context.Background()
-	repos2, _, err := client.Repositories.ListCollaborators(ctx, owner, repo, nil)
+	repos2, _, err := client.Repositories.ListContributors(ctx, owner, repo, nil)
 	if err != nil {
 		return nil, err
 	}
 	loginsArray := []string{}
 	for _, repo := range repos2 {
-		loginsArray = append(loginsArray, repo.GetLogin())
-		// fmt.Println(repo.GetLogin())
+		contribs := repo.GetContributions()
+		// contribs := strconv.Itoa(repo.GetContributions())
+		name := repo.GetLogin()
+		url := colorize(color.FgBlue, repo.GetHTMLURL())
+		formatted := fmt.Sprintf("%-4v %-20s %v", contribs, name, url)
+		loginsArray = append(loginsArray, formatted)
 	}
 	return loginsArray, nil
 }
@@ -115,7 +139,7 @@ func ListCommits(owner string, repo string, exclude []string, opt *github.Commit
 
 	go func() error {
 		for page := 1; true; page++ {
-			opt.ListOptions = github.ListOptions{Page: page, PerPage: 50}
+			opt.ListOptions = github.ListOptions{Page: page, PerPage: 5}
 			commitList, _, err := client.Repositories.ListCommits(ctx, owner, repo, opt)
 
 			if err != nil {
@@ -223,48 +247,4 @@ func colorize(colorVar color.Attribute, str ...string) string {
 type Config struct {
 	Owner string `json:"owner"`
 	Repo  string `json:"repo"`
-}
-
-func main() {
-	color.NoColor = false
-	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Gmark is a tool for grading projects residing on github.\n\n")
-		flag.PrintDefaults()
-	}
-	// configj, _ := json.Marshal(&Config{Owner: "jfkdf", Repo: "kdjfd"})
-	// ioutil.WriteFile("/tmp/gitme-config", configj, 0644)
-	// data, _ := ioutil.ReadFile("/tmp/gitme-config")
-	// config := Config{}
-	// _ = json.Unmarshal(data, &config)
-	// fmt.Printf("%+v", config)
-	// return
-	flag.Parse()
-	// client := github.NewClient(nil)
-
-	// _ = os.Chdir("/Users/Ahmed/go/src/gmark")
-	// out, _ := exec.Command("more", "gmark.go").Output()
-	// fmt.Println(out)
-
-	ctx := context.Background()
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: "c57d151c767b927601458fdae8b88b23a7529788"},
-	)
-	tc := oauth2.NewClient(ctx, ts)
-	_ = tc
-	client := github.NewClient(nil)
-
-	// list all repositories for the authenticated user
-	// repos, _, _ := client.Repositories.List(ctx, "", nil)
-	// // for _, repo := range repos {
-	// // fmt.Println(repo.GetName())
-	// // }
-
-	// logins, err := listContributors("secourse2016", "404notfound", client)
-	// if err != nil {
-	// }
-	_ = client
-	// _ = ListCommits("secourse2016", "404notfound", client)
-
-	// log.Fatal(err)
-	// fmt.Println(logins)
 }

@@ -9,7 +9,7 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/ahmedhagii/gitme"
+	"github.com/ahmedhagii/gitme/misc"
 	"github.com/google/go-github/github"
 	"github.com/google/subcommands"
 )
@@ -70,11 +70,11 @@ func (c *contribCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{
 	client := github.NewClient(oauthClient)
 	//
 
-	contribs, err := gitme.ListContributors(config.Owner, config.Repo, client)
+	contribs, err := misc.ListContributors(config.Owner, config.Repo, client)
 	if err != nil {
 		fmt.Println(err)
 		return subcommands.ExitFailure
 	}
-	gitme.OutputToPager(contribs)
+	misc.OutputToPager(contribs)
 	return subcommands.ExitSuccess
 }
