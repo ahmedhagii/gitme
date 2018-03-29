@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/ahmedhagii/gitme.svg?branch=master)](https://travis-ci.org/ahmedhagii/gitme)
 
-A command line tool wrapping the github api.
+A command line tool wrapping the Github API. This can be helpful in getting information about large repositories like logs, chnages history without having to clone the repos.
 
 
 ## Installing the CLI
